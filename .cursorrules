@@ -1,7 +1,7 @@
 # Dialect - AI-powered team collaboration platform
 
 ## Tech Stack
-- Next.js 14 (App Router)
+- Next.js 15 (App Router)
 - TypeScript
 - Tailwind CSS
 - Supabase (Auth & Database)
@@ -18,6 +18,49 @@
 /lib                   # Utility functions and shared code
 /utils                 # Helper functions
 
+## Dynamic Route Parameters (Next.js 15+)
+### Page Components
+```typescript
+// Type definition
+interface PageProps {
+  params: Promise<{
+    paramName: string;
+  }>;
+}
+
+// Usage in page component
+export default async function Page({ params }: PageProps) {
+  const { paramName } = await params;
+  // Use paramName...
+}
+
+// Usage in generateMetadata
+export async function generateMetadata({ params }: PageProps) {
+  const { paramName } = await params;
+  return {
+    title: `Page ${paramName}`,
+  };
+}
+```
+
+### Route Handlers
+```typescript
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ paramName: string }> }
+) {
+  const { paramName } = await params;
+  // Use paramName...
+}
+```
+
+### Key Rules
+1. Always type params as a Promise
+2. Always await params before accessing properties
+3. Update both page components and API routes
+4. Apply in generateMetadata and other metadata functions
+5. Don't access params properties directly without awaiting
+
 ## Key Dependencies
 - @supabase/auth-helpers-nextjs
 - @supabase/supabase-js
@@ -26,6 +69,7 @@
 - react-dom
 - tailwindcss
 - typescript
+- sonner                # Toast notifications
 
 ## Environment Variables
 NEXT_PUBLIC_SUPABASE_URL=        # Supabase project URL
@@ -50,4 +94,5 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=   # Supabase anonymous key
 - Follow Next.js App Router patterns
 - Component-first architecture
 - Tailwind CSS for styling
-- Server and Client Components separation 
+- Server and Client Components separation
+- Async route parameters handling 

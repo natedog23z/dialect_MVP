@@ -5,12 +5,22 @@ import { ArrowLeft } from 'lucide-react';
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-export default async function RoomPage({
-  params,
-}: {
-  params: { roomId: string };
-}) {
+interface PageProps {
+  params: Promise<{
+    roomId: string;
+  }>;
+}
+
+export async function generateMetadata({ params }: PageProps) {
+  const { roomId } = await params;
+  return {
+    title: `Room ${roomId}`,
+  };
+}
+
+export default async function RoomPage({ params }: PageProps) {
   const supabase = await createClient();
+  const { roomId } = await params;
 
   // Get the current user
   const {
@@ -25,7 +35,7 @@ export default async function RoomPage({
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("*")
-    .eq("id", params.roomId)
+    .eq("id", roomId)
     .single();
 
   if (roomError || !room) {
@@ -36,7 +46,7 @@ export default async function RoomPage({
   const { data: participant, error: participantError } = await supabase
     .from("room_participants")
     .select("*")
-    .eq("room_id", params.roomId)
+    .eq("room_id", roomId)
     .eq("user_id", user.id)
     .single();
 
