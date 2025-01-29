@@ -14,7 +14,7 @@ export const signUpAction = async (formData: FormData) => {
   if (!email || !password) {
     return encodedRedirect(
       "error",
-      "/sign-up",
+      "/signup",
       "Email and password are required",
     );
   }
@@ -29,11 +29,11 @@ export const signUpAction = async (formData: FormData) => {
 
   if (error) {
     console.error(error.code + " " + error.message);
-    return encodedRedirect("error", "/sign-up", error.message);
+    return encodedRedirect("error", "/signup", error.message);
   } else {
     return encodedRedirect(
       "success",
-      "/sign-up",
+      "/signup",
       "Thanks for signing up! Please check your email for a verification link.",
     );
   }
@@ -50,10 +50,10 @@ export const signInAction = async (formData: FormData) => {
   });
 
   if (error) {
-    return encodedRedirect("error", "/sign-in", error.message);
+    return encodedRedirect("error", "/login", error.message);
   }
 
-  return redirect("/protected");
+  return redirect("/dashboard");
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
@@ -130,5 +130,47 @@ export const resetPasswordAction = async (formData: FormData) => {
 export const signOutAction = async () => {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  return redirect("/sign-in");
+  return redirect("/login");
+};
+
+export const joinRoomAction = async (roomId: string) => {
+  const supabase = await createClient();
+  
+  // Get the current user
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    return encodedRedirect("error", "/login", "You must be logged in to join a room");
+  }
+
+  // Check if room exists
+  const { data: room, error: roomError } = await supabase
+    .from('rooms')
+    .select('id')
+    .eq('id', roomId)
+    .single();
+
+  if (roomError || !room) {
+    return encodedRedirect("error", "/dashboard", "Room not found");
+  }
+
+  // Add user to room_participants
+  const { error: joinError } = await supabase
+    .from('room_participants')
+    .insert({
+      room_id: roomId,
+      user_id: user.id
+    })
+    .select()
+    .single();
+
+  if (joinError) {
+    // If error is about unique constraint, user is already in room
+    if (joinError.code === '23505') {
+      return redirect(`/room/${roomId}`);
+    }
+    return encodedRedirect("error", "/dashboard", "Failed to join room");
+  }
+
+  return redirect(`/room/${roomId}`);
 };

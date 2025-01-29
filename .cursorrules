@@ -1,0 +1,53 @@
+# Dialect - AI-powered team collaboration platform
+
+## Tech Stack
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- Supabase (Auth & Database)
+- shadcn/ui Components
+
+## Project Structure
+/app                    # Next.js App Router pages and layouts
+  /auth                 # Authentication related routes
+  /login               # Login page
+  /signup              # Signup page
+/components            # React components
+  /auth               # Authentication components
+  /ui                 # UI components from shadcn
+/lib                   # Utility functions and shared code
+/utils                 # Helper functions
+
+## Key Dependencies
+- @supabase/auth-helpers-nextjs
+- @supabase/supabase-js
+- next
+- react
+- react-dom
+- tailwindcss
+- typescript
+
+## Environment Variables
+NEXT_PUBLIC_SUPABASE_URL=        # Supabase project URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY=   # Supabase anonymous key
+
+## Styling
+- Primary color: #4477FF
+- Background: #1a1f2e
+- Dark theme by default
+- Tailwind CSS for styling
+- Inter font from Google Fonts
+
+## Features
+- Email/password authentication
+- Protected routes
+- Responsive design
+- Dark theme
+- Modern UI components
+
+## Development Practices
+- Use TypeScript for type safety
+- Follow Next.js App Router patterns
+- Component-first architecture
+- Tailwind CSS for styling
+- Server and Client Components separation 

@@ -1,0 +1,91 @@
+## Product Requirements Document
+Feature: Secure Room Invitations
+Version: 1.1
+
+1. Objective
+Enable room members to invite collaborators through secure, trackable links while maintaining platform security and scalability.
+Key Goals
+Allow any room member to generate invite links
+Secure join flow with JWT validation
+No participant cap (MVP)
+7-day link expiration
+Invite history tracking
+2. User Flow
+journey
+  title Room Invitation Flow
+  section Creator
+    Create Room: 5: Creator
+    Generate Link: 5: Creator
+    Share Link: 3: Creator
+  section Invitee
+    Receive Link: 5: Invitee
+    Sign Up/Login: 4: Invitee
+    Join Room: 5: Invitee
+  section Member
+    Access Settings: 3: Member
+    Generate New Link: 4: Member
+3. Technical Specifications
+JSON Web Token (JWT) Structure
+{
+  "room_id": "uuidv4",
+  "inviter_id": "uuidv4",
+  "exp": 1735689600 // Unix timestamp (7 days)
+}
+Backend Requirements
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| /join/[token] | GET | Validate token and add participant |
+| /api/invites | POST | Generate new invite token |
+| /api/invites/history | GET | Retrieve invite history |
+Database Changes
+-- Add invitation tracking table
+CREATE TABLE room_invites (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  room_id UUID REFERENCES rooms(id),
+  inviter_id UUID REFERENCES users(id),
+  token TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+-- Add invitation relationship to participants
+ALTER TABLE room_participants
+ADD COLUMN invited_by UUID REFERENCES users(id);
+4. UI/UX Requirements
+Key Components
+1. Post-Creation Invite Dialog
+Auto-appears after room creation
+Contains:
+Shareable link with copy button
+2. Room Settings Page
+   <div className="space-y-6">
+     <InviteHistoryTable />
+     <Button variant="outline" onClick={generateNewLink}>
+       <LinkIcon className="mr-2 h-4 w-4" />
+       Create New Invite
+     </Button>
+   </div>
+3. Visual Feedback
+Success: "Invite link copied to clipboard" toast
+Error: "Invalid or expired link" modal
+5. Security Requirements
+1. Validation Checks
+Token signature verification
+Expiration date validation
+Inviter membership check
+Existing participant prevention
+2. Rate Limiting
+10 invites/hour per user
+50 joins/hour per room
+3. Data Protection
+RLS Policy Examples:
+   -- room_invites table
+   CREATE POLICY "Invites visible to room members"
+   ON room_invites FOR SELECT
+   USING (
+     EXISTS (
+       SELECT 1 FROM room_participants
+       WHERE room_id = room_invites.room_id
+       AND user_id = auth.uid()
+     )
+   );

@@ -1,0 +1,260 @@
+# Software Requirements Specification (SRS)
+
+## 1. Introduction
+
+### 1.1 Purpose
+The purpose of this document is to outline the requirements for an **MVP** (Minimum Viable Product) of an **AI-powered group chat web application** focused on real-time messaging, sharing content (text, URLs, media, files), and leveraging a **Large Language Model (LLM)** integration. The application will allow **rooms** of up to 12 participants to collaborate and retrieve insights from shared content via **DeepSeek R1** and potentially other models (e.g., **Gemini 2.0**).
+
+### 1.2 Scope
+- **Product Name**: Dialect
+- **Goal**: Provide real-time collaboration features, context-aware AI-driven insights, and automatic suggestion of AI prompts based on conversation context.
+- **Main Technologies**: Next.js (frontend), Supabase (backend), DeepSeek R1 & optional LLM Router (AI integration), Crawl4AI (content scraping).
+
+### 1.3 Definitions, Acronyms, and Abbreviations
+- **MVP**: Minimum Viable Product
+- **LLM**: Large Language Model
+- **UI/UX**: User Interface / User Experience
+- **Supabase**: Backend-as-a-service for database, authentication, and real-time APIs
+- **DeepSeek R1**: AI component used for real-time data querying and advanced reasoning
+- **Crawl4AI**: A web crawler used for scraping and preprocessing content from shared URLs
+- **Gemini 2.0**: Hypothetical or future LLM with larger context window (1M tokens) for handling big files
+
+### 1.4 References
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Supabase Documentation](https://supabase.com/docs)
+- [DeepSeek R1](https://api-docs.deepseek.com/guides/reasoning_model)
+- [Gemini 2.0](https://developers.google.com/gemini/api/reference/rest)
+- [Crawl4AI](https://crawl4ai.com/docs)
+
+---
+
+## 2. Overall Description
+
+### 2.1 Product Perspective
+This application is a standalone product using **Next.js** for the frontend and **Supabase** for real-time data synchronization. Each **room** (up to 12 participants) can share text, files, and URLs. When URLs are shared, **Crawl4AI** scrapes and processes them, storing the data in Supabase. One or more LLMs (DeepSeek R1, Gemini 2.0, etc.) can then be used to provide context-aware queries, insights, and suggested prompts based on the conversation or the stored data.
+
+### 2.2 Product Features Summary
+1. **Real-time Chat**: Slack-like UX for multiple participants (2–12) with threaded discussions.
+2. **Content Sharing**: Upload files, paste URLs, or send text; automatically scrape URLs to store structured content.
+3. **AI Integration**: 
+   - Context-aware Q&A and summaries using DeepSeek R1 (and/or Gemini 2.0).
+   - Automatic suggestion of prompts based on the current conversation context, triggered after new messages or on a set interval.
+   - Optional LLM router for intelligent selection of the best LLM based on content size or query type.
+
+### 2.3 User Characteristics
+- **Small Room Participants (2–12)**:
+  - Require real-time collaboration with minimal lag.
+  - Need quick AI-driven insights: summarization, Q&A, and prompt suggestions.
+  - Value flexible, intuitive interface for sharing files, links, transcripts, etc.
+
+### 2.4 Constraints
+- **Performance**: Must handle real-time messaging efficiently for up to 12 concurrent participants.
+- **Security**: Data must be protected; only authenticated room participants can access room data.
+- **LLM Cost**: High-volume or large context queries should be managed carefully to control operational costs.
+
+---
+
+## 3. System Features and Requirements
+
+### 3.1 Core Features
+
+#### 3.1.1 Real-time Chat Interface
+- **Description**: A Slack-like interface for synchronous communication within a room.
+- **Functional Requirements**:
+  1. Users can create or join a **room** (up to 12 participants).
+  2. Users can send and receive text messages in real time.
+  3. Users can start threaded replies, linking conversations to specific messages.
+  4. The UI updates in real time for all participants currently in the room.
+- **Non-Functional Requirements**:
+  1. The interface must be intuitive and responsive.
+  2. Real-time operations must have minimal latency for a smooth experience.
+
+#### 3.1.2 Content Management
+- **Description**: Users can share files or URLs, which are then stored in Supabase. Shared URLs are processed by Crawl4AI.
+- **Functional Requirements**:
+  1. Users can upload images, documents, or short videos (file-size constraints to be defined).
+  2. Each file is stored in Supabase and linked to the corresponding message.
+  3. When a URL is shared, Crawl4AI scrapes the content and stores structured data (e.g., text, metadata) in Supabase.
+  4. Shared content is searchable and accessible for future reference.
+- **Non-Functional Requirements**:
+  1. The system must ensure consistent and secure storage of uploaded content.
+  2. Large files or high-volume scraping tasks should not block regular chat operations.
+
+#### 3.1.3 AI Integration and Prompt Suggestion
+- **Description**: **DeepSeek R1** (and optionally **Gemini 2.0**) provides context-aware answers and suggestions. A prompt suggestion engine proactively provides recommended queries or prompts based on the conversation thread.
+- **Functional Requirements**:
+  1. **Contextual Q&A**: Users can type questions about shared content and get answers from DeepSeek R1/Gemini 2.0.
+  2. **Summaries**: Users can request summaries of long threads or large files.
+  3. **Prompt Suggestions**: After a new message arrives in a thread (or periodically, e.g., every X minutes), the system generates a few relevant prompt suggestions (e.g., “Ask the AI to summarize this conversation,” “Extract key dates,” “Propose next steps,” etc.).
+  4. **LLM Router**:
+     - If enabled, the system chooses between DeepSeek R1 (for short queries or detailed reasoning) and Gemini 2.0 (for large context queries).
+     - Criteria for choosing an LLM might include file size, message length, or query complexity.
+- **Non-Functional Requirements**:
+  1. Responses should be delivered within a reasonable timeframe (target <5s).
+  2. Suggestions must be relevant to the most recent messages or to the overall thread context.
+  3. LLM usage should be cost-effective. The system may limit requests or switch LLMs when cost thresholds are reached.
+
+#### 3.1.4 LLM Performance vs. Cost Management
+- **Description**: Tools and strategies to manage performance overhead and control LLM costs.
+- **Functional Requirements**:
+  1. **Usage Tracking**: Log each query (timestamp, room ID, LLM used, input size, output size, cost estimate).
+  2. **Rate Limits**: Implement daily or monthly usage limits for each room or user, preventing cost overruns.
+  3. **Cost-based Decision**: The LLM router can switch to a cheaper (or open-source) model if usage approaches a certain threshold.
+- **Non-Functional Requirements**:
+  1. Resource usage data should be easily accessible for admins or owners of the application.
+  2. Fail gracefully when cost thresholds are met (e.g., show a warning and limit advanced AI features).
+
+---
+
+## 4. External Interface Requirements
+
+### 4.1 User Interface
+- The application is a **Next.js** single-page app.
+- Key UI components:
+  - **Rooms List**: Rooms the user is part of, up to 12 participants per room.
+  - **Chat Window**: 
+    - Main messages area (real-time feed).
+    - Threaded replies interface.
+    - Attachment & URL sharing capabilities.
+  - **AI Panel**: 
+    - User query input for direct Q&A.
+    - Display of AI responses and suggested prompts.
+    - Option to choose which LLM to query (manual override, if desired).
+
+### 4.2 Hardware Interface
+- Web-based, requiring only standard devices with an internet connection (desktop, laptop, tablet, smartphone).
+
+### 4.3 Software Interface
+- **Supabase** for database, authentication, and real-time channels.
+- **Crawl4AI** for scraping and structured data extraction from shared URLs.
+- **DeepSeek R1** and **Gemini 2.0** (or other LLMs) for context-aware AI tasks.
+- **LLM Router** to decide which model to call based on usage, cost, or context length.
+
+---
+
+## 5. Database Requirements
+
+### 5.1 Schema Overview
+- **Users** Table:
+  - `id` (primary key)
+  - `email`
+  - `display_name`
+  - `created_at`
+
+- **Rooms** Table:
+  - `id` (primary key)
+  - `name`
+  - `max_participants` (default: 12)
+  - `created_at`
+
+- **Room_Participants** Table (to handle many-to-many user-room relationships):
+  - `id` (primary key)
+  - `user_id` (foreign key → Users)
+  - `room_id` (foreign key → Rooms)
+  - `created_at`
+
+- **Messages** Table:
+  - `id` (primary key)
+  - `room_id` (foreign key → Rooms)
+  - `user_id` (foreign key → Users)
+  - `content` (text)
+  - `thread_parent_id` (nullable, self-reference for threads)
+  - `created_at`
+
+- **Shared_Content** Table:
+  - `id` (primary key)
+  - `message_id` (foreign key → Messages)
+  - `content_type` (e.g., file, url, text)
+  - `content_url` (if file or external link)
+  - `processed_data` (for storing extracted text or metadata from Crawl4AI)
+  - `created_at`
+
+- **AI_Usage_Logs** Table (for cost/performance tracking):
+  - `id` (primary key)
+  - `room_id` (foreign key → Rooms)
+  - `user_id` (foreign key → Users)
+  - `llm_model` (e.g., “DeepSeek R1,” “Gemini 2.0”)
+  - `query_text`
+  - `response_size`
+  - `timestamp`
+  - `estimated_cost`
+
+---
+
+## 6. Other Non-Functional Requirements
+
+### 6.1 Security
+- **Authentication**: Supabase Auth or JWT-based, ensuring only room participants access that room’s content.
+- **Data Encryption**: Use SSL/TLS for data in transit; enable encryption for data at rest.
+- **Access Control**: Room owners can invite/remove participants; only authorized users can post, retrieve content, or query the AI.
+
+### 6.2 Performance
+- Real-time messaging must remain responsive for up to 12 participants per room.
+- AI responses should typically return in under 5 seconds, though large file queries may require additional time.
+
+### 6.3 Reliability and Availability
+- Target 99% uptime during MVP phase.
+- System should handle errors gracefully (e.g., LLM unavailability, Crawl4AI failures, or network outages).
+
+### 6.4 Maintainability
+- Code should follow standard Next.js project structure with clear separation of concerns (frontend, backend, AI).
+- Microservices or function-based architecture for the LLM router (as needed) to allow easy updates or model switches.
+
+### 6.5 Usability
+- Familiar “Slack-like” chat interface to reduce onboarding friction.
+- Clear instructions or UI prompts guiding users on how to use AI features (query input, prompt suggestions, switching LLMs).
+
+---
+
+## 7. MVP Scope
+
+### 7.1 Frontend MVP
+1. **Room-based Chat**: Implement creation/joining of up to 12-participant rooms.
+2. **Real-time Messaging**: Slack-like UI with thread support.
+3. **Basic Attachments**: Users can upload small files or share URLs.
+
+### 7.2 Backend MVP
+1. **Supabase Setup**: Create database tables and enable real-time channels for messages.
+2. **Crawl4AI Integration**: Automatically scrape URLs and store results in `Shared_Content`.
+3. **LLM Integration**: Provide a basic endpoint for querying DeepSeek R1 (and possibly a second model).
+
+### 7.3 AI MVP
+1. **Contextual Q&A**: Ask questions about shared data and retrieve summarized or direct answers.
+2. **Prompt Suggestions**: After each new message (or on a time interval), display recommended prompts.
+3. **LLM Router (Optional)**: If enabled, switch between DeepSeek R1 for reasoning tasks and Gemini 2.0 for large-context content.
+
+### 7.4 Performance & Cost Management MVP
+1. **Usage Logs**: Track each AI request in `AI_Usage_Logs`.
+2. **Basic Rate Limiting**: Restrict the number of AI queries per user/room/day to avoid unbounded costs.
+
+---
+
+## 8. Deliverables
+
+1. **Next.js Web Application**: Functional chat UI, room management, real-time messaging, and AI prompt suggestions.
+2. **Supabase Database**: Configured schema for users, rooms, messages, shared content, AI usage logs.
+3. **URL Scraping**: Verified integration with Crawl4AI to ingest URL content.
+4. **AI Layer**: Working context-aware Q&A, summarization, and prompt suggestions via DeepSeek R1 and/or Gemini 2.0 through an LLM router (optional).
+
+---
+
+## 9. Evaluation Criteria
+
+1. **Real-time Chat & Threading**: Smooth, near-instant updates for up to 12 concurrent users per room.
+2. **Content Management**: Correct storage of files, URLs, and transcripts in Supabase.
+3. **AI Relevance**: DeepSeek R1/Gemini 2.0 responses are contextually accurate, with prompt suggestions adding genuine value.
+4. **Cost/Performance Balance**: LLM usage logs track consumption accurately; system can throttle or switch models when needed.
+
+---
+
+## 10. Next Steps
+
+1. **Database & Schema Setup**: Configure Supabase and create all required tables (Rooms, Room_Participants, Messages, etc.).
+2. **Chat UI Development**: Implement the Next.js frontend with real-time messaging and threaded conversations.
+3. **Crawl4AI Integration**: Ensure URL scraping processes are tested and stored content is accessible for AI queries.
+4. **AI Integration & Prompt Logic**:
+   - Establish the main AI query endpoint with DeepSeek R1.
+   - Implement the prompt suggestion feature (refresh after new messages or set intervals).
+   - Optionally add LLM router logic to incorporate Gemini 2.0 for large-file or extended context queries.
+5. **Performance & Cost Controls**: Add usage logs, define rate limiting, and configure fallback strategies or LLM cost thresholds.
+6. **Testing & Feedback**: Conduct functional, integration, and AI accuracy testing, then gather user feedback in a small pilot release.
