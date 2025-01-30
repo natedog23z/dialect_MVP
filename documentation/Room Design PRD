@@ -1,0 +1,119 @@
+## Product Requirements Document
+Feature: Real-time Collaboration Room Design  
+Version: 1.2  
+Owner: UI/UX Team  
+
+### 1. Objective
+Create an immersive real-time collaboration space that balances:
+- Slack-like messaging familiarity
+- AI-enhanced conversation features
+- Intimate group dynamics (2-12 users)
+- Contextual thread management
+
+Key Goals:
+1. Implement core messaging interface from `Room Design` code
+2. Integrate with existing auth and room participation system
+3. Lay foundation for AI features in MVP scope
+
+### 2. User Flow
+```typescript:app/components/Todo.tsx
+startLine: 16
+endLine: 209
+```
+**Core Interaction Loop:**
+1. User enters room via dashboard link
+2. Views message history with threading
+3. Composes new message/response
+4. Interacts with message toolbar
+5. Manages conversation threads
+
+### 3. Technical Specifications
+
+**UI Components:**
+- `MessageWithToolbar` (lines 19-58)
+- `ThreadPanel` (lines 59-113)
+- Message composition bar (lines 185-202)
+- Audio playback controls (lines 159-182)
+
+**Supabase Integration:**
+```typescript:app/room/[roomId]/page.tsx
+startLine: 57
+endLine: 88
+```
+- Real-time message subscriptions
+- Participant presence tracking
+- Thread relationship management
+
+### 4. UI/UX Requirements
+
+**Must Have (MVP):**
+1. Message threading system
+2. Basic message formatting
+3. Audio playback controls
+4. Invite button integration
+5. Dark mode theming (#1a1f2e palette)
+
+**Nice to Have:**
+1. Message reactions
+2. Typing indicators
+3. Read receipts
+4. AI prompt suggestions
+
+**Accessibility:**
+- Keyboard navigation
+- ARIA labels for icons
+- Contrast ratio compliance
+
+### 5. Design System Alignment
+
+**Reused Components:**
+1. Button variants from `@/components/ui/button`
+2. Dialog patterns from `create-room-dialog.tsx`
+3. Input styling from message composition
+4. Icon set consistency (lucide-react)
+
+**New Components:**
+1. `MessageWithToolbar`
+2. `ThreadPanel` 
+3. Audio progress bar
+4. Contextual hover controls
+
+### 6. MVP Scope
+
+**Included:**
+- Core message display/creation
+- Thread management
+- Basic participant invites
+- Dark theme implementation
+- Supabase real-time integration
+
+**Post-MVP:**
+- File attachments
+- AI summary generation
+- Message search
+- Custom emoji reactions
+
+### 7. Performance Budget
+| Feature                  | Target        |
+|--------------------------|---------------|
+| Initial load             | <2s           |
+| Message send latency     | <300ms        |
+| Thread panel open        | <500ms        |
+| Audio playback start     | <1s           |
+
+### 8. Security
+1. Message content sanitization
+2. Participant permission checks
+3. Rate limiting on message sends
+4. JWT validation for real-time
+
+### 9. Metrics
+1. Message send success rate
+2. Thread engagement rate
+3. Average session duration
+4. Participant retention
+
+### 10. Open Questions
+1. Pagination strategy for history?
+2. Mobile responsiveness plan?
+3. LLM integration points?
