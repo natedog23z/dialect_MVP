@@ -9,11 +9,118 @@
 
 ## Project Structure
 /app                    # Next.js App Router pages and layouts
-  /auth                 # Authentication related routes
-  /login               # Login page
-  /signup              # Signup page
+  /auth                # Authentication related routes
+  /login              # Login page
+  /signup             # Signup page
+  /room               # Room-related routes
+    /[roomId]         # Dynamic room routes
 /components            # React components
-  /auth               # Authentication components
-  /ui                 # UI components from shadcn
+  /auth              # Authentication components
+  /ui                # UI components from shadcn
+  /rooms             # Room-related components
 /lib                   # Utility functions and shared code
-/utils                 # Helper functions
+/utils                # Helper functions
+
+## Next.js 15 Dynamic Route Parameters
+
+### Layout Components
+```typescript
+// Async Layout Pattern
+interface LayoutProps {
+  children: React.ReactNode;
+  params: Promise<{
+    [key: string]: string;  // Dynamic route params
+  }>;
+}
+
+export default async function Layout({ children, params }: LayoutProps) {
+  const routeParams = await params;  // Always await params in async components
+  // ... rest of layout logic
+}
+```
+
+### Page Components
+```typescript
+// Async Page Pattern
+interface PageProps {
+  params: Promise<{
+    [key: string]: string;  // Dynamic route params
+  }>;
+  searchParams: Promise<{
+    [key: string]: string | string[] | undefined;
+  }>;
+}
+
+export default async function Page({ params, searchParams }: PageProps) {
+  const routeParams = await params;  // Always await params
+  const queryParams = await searchParams;  // Always await searchParams
+  // ... rest of page logic
+}
+```
+
+### Client Components
+```typescript
+'use client'
+
+import { use } from 'react';
+
+interface ClientProps {
+  params: Promise<{
+    [key: string]: string;
+  }>;
+}
+
+export default function ClientComponent({ params }: ClientProps) {
+  const routeParams = use(params);  // Use React.use for client components
+  // ... rest of component logic
+}
+```
+
+## Best Practices
+1. Always type params as Promise in Next.js 15
+2. Use `await` for params in async server components
+3. Use `React.use` for params in client components
+4. Add `export const dynamic = 'force-dynamic'` for dynamic routes
+5. Keep layouts minimal, move data fetching to pages when possible
+6. Handle params consistently across the application
+
+## Common Patterns
+1. Room Routes:
+   ```typescript
+   interface RoomParams {
+     params: Promise<{
+       roomId: string;
+     }>;
+   }
+   ```
+
+2. User Routes:
+   ```typescript
+   interface UserParams {
+     params: Promise<{
+       userId: string;
+     }>;
+   }
+   ```
+
+3. Nested Dynamic Routes:
+   ```typescript
+   interface NestedParams {
+     params: Promise<{
+       parentId: string;
+       childId: string;
+     }>;
+   }
+   ```
+
+## Error Handling
+1. Always validate params after awaiting
+2. Use proper type guards
+3. Implement fallbacks for invalid params
+4. Redirect on invalid routes
+
+## Performance Tips
+1. Delay param access until needed
+2. Use proper caching strategies
+3. Implement proper loading states
+4. Handle edge cases gracefully
