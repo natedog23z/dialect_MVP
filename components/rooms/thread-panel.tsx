@@ -30,6 +30,7 @@ interface ThreadPanelProps {
     };
   };
   thread: Thread | null;
+  onReplyAdded?: () => void;
 }
 
 interface DatabaseMessage {
@@ -57,7 +58,7 @@ interface DatabaseReplyResponse {
   user: DatabaseUser | null;
 }
 
-export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread }: ThreadPanelProps) {
+export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onReplyAdded }: ThreadPanelProps) {
   const [replies, setReplies] = useState<Thread[]>([]);
   const [replyText, setReplyText] = useState('');
   const supabase = createClient();
@@ -112,6 +113,39 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread }: Th
     }
   };
 
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !thread) return;
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          room_id: roomId,
+          user_id: currentUser.id,
+          content: replyText.trim(),
+          message_type: 'text',
+          thread_parent_id: thread.id
+        });
+
+      if (error) {
+        console.error('Error sending reply:', error);
+        return;
+      }
+
+      setReplyText('');
+      onReplyAdded?.();
+    } catch (error) {
+      console.error('Error sending reply:', error);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendReply();
+    }
+  };
+
   // Subscribe to new replies
   useEffect(() => {
     if (!thread) return;
@@ -142,6 +176,8 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread }: Th
               }
             };
             setReplies(prev => [...prev, completeReply]);
+            // Trigger count update for other users' replies too
+            onReplyAdded?.();
           } else {
             // For other users' replies, use a temporary display
             const completeReply: Thread = {
@@ -156,6 +192,8 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread }: Th
               }
             };
             setReplies(prev => [...prev, completeReply]);
+            // Trigger count update for other users' replies
+            onReplyAdded?.();
           }
         }
       )
@@ -165,38 +203,6 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread }: Th
       supabase.removeChannel(channel);
     };
   }, [thread, currentUser]);
-
-  const handleSendReply = async () => {
-    if (!replyText.trim() || !thread) return;
-
-    try {
-      const { error } = await supabase
-        .from('messages')
-        .insert({
-          room_id: roomId,
-          user_id: currentUser.id,
-          content: replyText.trim(),
-          message_type: 'text',
-          thread_parent_id: thread.id
-        });
-
-      if (error) {
-        console.error('Error sending reply:', error);
-        return;
-      }
-
-      setReplyText('');
-    } catch (error) {
-      console.error('Error sending reply:', error);
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendReply();
-    }
-  };
 
   if (!isOpen || !thread) return null;
 

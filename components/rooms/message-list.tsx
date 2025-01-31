@@ -11,6 +11,7 @@ interface Message {
   content: string;
   message_type: 'text' | 'audio' | 'system';
   created_at: string;
+  replies_count?: number;
   user: {
     id: string;
     email: string;
@@ -41,6 +42,8 @@ interface DatabaseMessage {
   user_id: string;
   room_id: string;
   thread_parent_id?: string | null;
+  replies_count?: number;
+  replies?: { count: number };
 }
 
 export function MessageList({ messages: initialMessages, currentUser, roomId, onThreadSelect }: MessageListProps) {
@@ -88,6 +91,7 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
                   content: newMessage.content,
                   message_type: newMessage.message_type,
                   created_at: newMessage.created_at,
+                  replies_count: 0,
                   user: {
                     id: currentUser.id,
                     email: currentUser.email,
@@ -103,6 +107,7 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
                   content: newMessage.content,
                   message_type: newMessage.message_type,
                   created_at: newMessage.created_at,
+                  replies_count: 0,
                   user: {
                     id: newMessage.user_id,
                     email: 'Loading...',
@@ -112,8 +117,18 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
                 console.log('Adding message from other user:', completeMessage);
                 setMessages(prev => [...prev, completeMessage]);
               }
-            } else {
-              console.log('Skipping message - not a top-level message for this room');
+            } else if (newMessage.thread_parent_id) {
+              // Update reply count for the parent message
+              console.log('Updating reply count for message:', newMessage.thread_parent_id);
+              setMessages(prev => prev.map(msg => {
+                if (msg.id === newMessage.thread_parent_id) {
+                  return {
+                    ...msg,
+                    replies_count: (msg.replies_count || 0) + 1
+                  };
+                }
+                return msg;
+              }));
             }
           }
         }
@@ -175,10 +190,15 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
             <Button 
               variant="ghost" 
               size="sm" 
-              className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white"
+              className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white flex items-center gap-1"
               onClick={() => onThreadSelect?.(message)}
             >
               <MessageSquare size={16} />
+              {typeof message.replies_count === 'number' && message.replies_count > 0 && (
+                <span className="text-xs bg-[#4477FF] text-white px-1.5 rounded-full">
+                  {message.replies_count}
+                </span>
+              )}
             </Button>
             <Button variant="ghost" size="sm" className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white">
               <Smile size={16} />

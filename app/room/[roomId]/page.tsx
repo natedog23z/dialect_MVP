@@ -49,11 +49,16 @@ export default async function RoomPage({ params }: PageProps) {
   // Get initial messages
   const { data: messages } = await supabase
     .from("messages")
-    .select("*")
+    .select(`
+      *,
+      replies:messages!thread_parent_id(id)
+    `)
     .eq("room_id", roomId)
     .is("thread_parent_id", null)  // Only fetch top-level messages
     .order("created_at", { ascending: true })
     .limit(50);
+
+  console.log('Raw messages from Supabase:', messages);
 
   // Get user data for all messages
   const userIds = Array.from(new Set((messages || []).map(m => m.user_id)));
@@ -70,8 +75,13 @@ export default async function RoomPage({ params }: PageProps) {
       raw_user_meta_data: user.user_metadata
     };
     
+    // Count the actual number of replies
+    const replyCount = Array.isArray(message.replies) ? message.replies.length : 0;
+    console.log(`Message ${message.id} has ${replyCount} replies:`, message.replies);
+    
     return {
       ...message,
+      replies_count: replyCount,
       user: messageUser
     };
   });

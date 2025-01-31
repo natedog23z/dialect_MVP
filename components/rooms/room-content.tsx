@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageList } from "@/components/rooms/message-list";
 import { MessageInput } from "@/components/rooms/message-input";
 import { ThreadPanel } from "@/components/rooms/thread-panel";
 import { RoomHeader } from "@/components/rooms/room-header";
+import { createClient } from '@/utils/supabase/client';
 
 interface Message {
   id: string;
@@ -30,6 +31,56 @@ interface RoomContentProps {
 export function RoomContent({ room, participant, messagesWithUsers, user }: RoomContentProps) {
   const [activeThread, setActiveThread] = useState<Message | null>(null);
   const [isThreadOpen, setIsThreadOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>(messagesWithUsers);
+  const supabase = createClient();
+
+  const refreshMessages = async () => {
+    const { data: updatedMessages } = await supabase
+      .from("messages")
+      .select(`
+        *,
+        replies:messages!thread_parent_id(id)
+      `)
+      .eq("room_id", room.id)
+      .is("thread_parent_id", null)
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    console.log('Updated messages from Supabase:', updatedMessages);
+
+    if (updatedMessages) {
+      // Get user data for all messages
+      const userIds = Array.from(new Set(updatedMessages.map(m => m.user_id)));
+      const { data: users } = await supabase
+        .from("auth.users")
+        .select("id, email, raw_user_meta_data")
+        .in("id", userIds);
+
+      const messagesWithUsers = updatedMessages.map(message => {
+        const messageUser = users?.find(u => u.id === message.user_id) || {
+          id: message.user_id,
+          email: user.email,
+          raw_user_meta_data: user.user_metadata
+        };
+        
+        // Count the actual number of replies
+        const replyCount = Array.isArray(message.replies) ? message.replies.length : 0;
+        console.log(`Message ${message.id} has ${replyCount} replies:`, message.replies);
+        
+        return {
+          ...message,
+          replies_count: replyCount,
+          user: messageUser
+        };
+      });
+
+      setMessages(messagesWithUsers);
+    }
+  };
+
+  useEffect(() => {
+    setMessages(messagesWithUsers);
+  }, [messagesWithUsers]);
 
   const handleThreadSelect = (message: Message) => {
     setActiveThread(message);
@@ -37,6 +88,7 @@ export function RoomContent({ room, participant, messagesWithUsers, user }: Room
   };
 
   const handleThreadClose = () => {
+    refreshMessages(); // Refresh messages when closing thread panel
     setIsThreadOpen(false);
     setActiveThread(null);
   };
@@ -52,7 +104,7 @@ export function RoomContent({ room, participant, messagesWithUsers, user }: Room
         {/* Main Message Area */}
         <div className="flex-1 flex flex-col min-w-0">
           <MessageList 
-            messages={messagesWithUsers}
+            messages={messages}
             currentUser={{
               id: user.id,
               email: user.email || '',
@@ -78,6 +130,7 @@ export function RoomContent({ room, participant, messagesWithUsers, user }: Room
             user_metadata: user.user_metadata
           }}
           thread={activeThread}
+          onReplyAdded={refreshMessages}
         />
       </main>
     </div>
