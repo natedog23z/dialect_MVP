@@ -30,9 +30,20 @@ interface MessageListProps {
     };
   };
   roomId: string;
+  onThreadSelect?: (message: Message) => void;
 }
 
-export function MessageList({ messages: initialMessages, currentUser, roomId }: MessageListProps) {
+interface DatabaseMessage {
+  id: string;
+  content: string;
+  message_type: 'text' | 'audio' | 'system';
+  created_at: string;
+  user_id: string;
+  room_id: string;
+  thread_parent_id?: string | null;
+}
+
+export function MessageList({ messages: initialMessages, currentUser, roomId, onThreadSelect }: MessageListProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -44,6 +55,7 @@ export function MessageList({ messages: initialMessages, currentUser, roomId }: 
   }, [initialMessages]);
 
   useEffect(() => {
+    console.log('Setting up real-time subscription for room:', roomId);
     const channel = supabase
       .channel(`room-${roomId}`)
       .on('postgres_changes', 
@@ -52,66 +64,57 @@ export function MessageList({ messages: initialMessages, currentUser, roomId }: 
           schema: 'public', 
           table: 'messages',
           filter: `room_id=eq.${roomId}`
-        }, 
+        },
         async (payload) => {
-          console.log('New message received:', payload);
+          console.log('Raw payload received:', payload);
+          
           if (payload.eventType === 'INSERT') {
-            // Fetch the message
-            const { data: message, error: messageError } = await supabase
-              .from('messages')
-              .select('*')
-              .eq('id', payload.new.id)
-              .single();
-
-            if (messageError) {
-              console.error('Error fetching message:', messageError);
-              return;
-            }
-
-            // Fetch the user data from auth.users
-            const { data: userData, error: userError } = await supabase
-              .from('auth.users')
-              .select('id, email, raw_user_meta_data')
-              .eq('id', message.user_id)
-              .single();
-
-            if (userError) {
-              console.error('Error fetching user:', userError);
-              // Try to use currentUser data if it's their message
-              if (message.user_id === currentUser.id) {
-                const completeMessage = {
-                  ...message,
+            const newMessage = payload.new as DatabaseMessage;
+            console.log('Checking message:', {
+              roomId: newMessage.room_id,
+              expectedRoomId: roomId,
+              threadParentId: newMessage.thread_parent_id,
+              isTopLevel: !newMessage.thread_parent_id
+            });
+            
+            // Only process messages that belong to this room and are top-level (no thread parent)
+            if (newMessage.room_id === roomId && !newMessage.thread_parent_id) {
+              console.log('Processing top-level message:', newMessage);
+              
+              // If it's the current user's message, we can use their data directly
+              if (newMessage.user_id === currentUser.id) {
+                const completeMessage: Message = {
+                  id: newMessage.id,
+                  content: newMessage.content,
+                  message_type: newMessage.message_type,
+                  created_at: newMessage.created_at,
                   user: {
                     id: currentUser.id,
                     email: currentUser.email,
                     raw_user_meta_data: currentUser.user_metadata
                   }
                 };
-                console.log('Complete message with current user:', completeMessage);
+                console.log('Adding message from current user:', completeMessage);
                 setMessages(prev => [...prev, completeMessage]);
               } else {
-                // Fallback for other users
-                const completeMessage = {
-                  ...message,
+                // For other users' messages, use a temporary display until the page refreshes
+                const completeMessage: Message = {
+                  id: newMessage.id,
+                  content: newMessage.content,
+                  message_type: newMessage.message_type,
+                  created_at: newMessage.created_at,
                   user: {
-                    id: message.user_id,
-                    email: 'Unknown User',
-                    raw_user_meta_data: {}
+                    id: newMessage.user_id,
+                    email: 'Loading...',
+                    raw_user_meta_data: { full_name: 'Loading...' }
                   }
                 };
-                console.log('Complete message with fallback user:', completeMessage);
+                console.log('Adding message from other user:', completeMessage);
                 setMessages(prev => [...prev, completeMessage]);
               }
-              return;
+            } else {
+              console.log('Skipping message - not a top-level message for this room');
             }
-
-            const completeMessage = {
-              ...message,
-              user: userData
-            };
-
-            console.log('Complete message with user:', completeMessage);
-            setMessages(prev => [...prev, completeMessage]);
           }
         }
       )
@@ -120,10 +123,10 @@ export function MessageList({ messages: initialMessages, currentUser, roomId }: 
       });
 
     return () => {
-      console.log('Cleaning up subscription');
+      console.log('Cleaning up subscription for room:', roomId);
       supabase.removeChannel(channel);
     };
-  }, [roomId]);
+  }, [roomId, currentUser.id, currentUser.email, currentUser.user_metadata]);
 
   useEffect(() => {
     console.log('Current messages:', messages);
@@ -169,7 +172,12 @@ export function MessageList({ messages: initialMessages, currentUser, roomId }: 
           )}
 
           <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-all duration-200 ease-in-out flex items-center gap-2 bg-[#2A2F3F] rounded-lg p-1 shadow-lg">
-            <Button variant="ghost" size="sm" className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white"
+              onClick={() => onThreadSelect?.(message)}
+            >
               <MessageSquare size={16} />
             </Button>
             <Button variant="ghost" size="sm" className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white">

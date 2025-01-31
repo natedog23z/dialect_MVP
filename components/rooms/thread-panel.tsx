@@ -13,65 +13,150 @@ interface Thread {
   user: {
     id: string;
     email: string;
-    raw_user_meta_data: {
-      full_name?: string;
-    };
+    full_name?: string;
   };
   replies?: Thread[];
 }
 
 interface ThreadPanelProps {
   roomId: string;
+  isOpen: boolean;
+  onClose: () => void;
+  currentUser: {
+    id: string;
+    email: string;
+    user_metadata: {
+      full_name?: string;
+    };
+  };
+  thread: Thread | null;
 }
 
-export function ThreadPanel({ roomId }: ThreadPanelProps) {
-  const [activeThread, setActiveThread] = useState<Thread | null>(null);
+interface DatabaseMessage {
+  id: string;
+  content: string;
+  message_type: 'text' | 'audio' | 'system';
+  created_at: string;
+  user_id: string;
+  thread_parent_id?: string;
+  room_id: string;
+}
+
+interface DatabaseUser {
+  id: string;
+  email: string;
+  full_name?: string;
+}
+
+interface DatabaseReplyResponse {
+  id: string;
+  content: string;
+  message_type: 'text' | 'audio' | 'system';
+  created_at: string;
+  user_id: string;
+  user: DatabaseUser | null;
+}
+
+export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread }: ThreadPanelProps) {
   const [replies, setReplies] = useState<Thread[]>([]);
+  const [replyText, setReplyText] = useState('');
   const supabase = createClient();
 
   useEffect(() => {
-    if (activeThread) {
-      loadThreadReplies(activeThread.id);
+    if (thread) {
+      loadThreadReplies(thread.id);
     }
-  }, [activeThread]);
+  }, [thread]);
 
   const loadThreadReplies = async (threadId: string) => {
-      const { data, error } = await supabase
+    try {
+      const { data: replyData, error: replyError } = await supabase
         .from('messages')
         .select(`
-        *,
+          *,
           user:user_id (
             id,
             email,
-            raw_user_meta_data
+            full_name
           )
         `)
         .eq('thread_parent_id', threadId)
         .order('created_at', { ascending: true });
 
-      if (error) {
-      console.error('Error loading replies:', error);
+      if (replyError) {
+        console.error('Error loading replies:', replyError);
         return;
       }
 
-    setReplies(data || []);
+      if (!replyData) {
+        setReplies([]);
+        return;
+      }
+
+      // Transform the data to match our Thread interface
+      const repliesWithUsers: Thread[] = replyData.map(reply => ({
+        id: reply.id,
+        content: reply.content,
+        message_type: reply.message_type as 'text' | 'audio' | 'system',
+        created_at: reply.created_at,
+        user: reply.user || {
+          id: reply.user_id,
+          email: 'Unknown User',
+          full_name: 'Unknown User'
+        }
+      }));
+
+      setReplies(repliesWithUsers);
+    } catch (error) {
+      console.error('Error in loadThreadReplies:', error);
+    }
   };
 
   // Subscribe to new replies
   useEffect(() => {
-    if (!activeThread) return;
+    if (!thread) return;
 
     const channel = supabase
-      .channel(`thread-${activeThread.id}`)
+      .channel(`thread-${thread.id}`)
       .on('postgres_changes', 
         { 
           event: 'INSERT', 
           schema: 'public', 
           table: 'messages',
-          filter: `thread_parent_id=eq.${activeThread.id}`
+          filter: `thread_parent_id=eq.${thread.id}`
         }, 
         (payload) => {
-          setReplies(prev => [...prev, payload.new as Thread]);
+          const newReply = payload.new as DatabaseMessage;
+          
+          // If it's the current user's reply, we can use their data directly
+          if (newReply.user_id === currentUser.id) {
+            const completeReply: Thread = {
+              id: newReply.id,
+              content: newReply.content,
+              message_type: newReply.message_type,
+              created_at: newReply.created_at,
+              user: {
+                id: currentUser.id,
+                email: currentUser.email,
+                full_name: currentUser.user_metadata.full_name
+              }
+            };
+            setReplies(prev => [...prev, completeReply]);
+          } else {
+            // For other users' replies, use a temporary display
+            const completeReply: Thread = {
+              id: newReply.id,
+              content: newReply.content,
+              message_type: newReply.message_type,
+              created_at: newReply.created_at,
+              user: {
+                id: newReply.user_id,
+                email: 'Loading...',
+                full_name: 'Loading...'
+              }
+            };
+            setReplies(prev => [...prev, completeReply]);
+          }
         }
       )
       .subscribe();
@@ -79,9 +164,41 @@ export function ThreadPanel({ roomId }: ThreadPanelProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeThread]);
+  }, [thread, currentUser]);
 
-  if (!activeThread) return null;
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !thread) return;
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          room_id: roomId,
+          user_id: currentUser.id,
+          content: replyText.trim(),
+          message_type: 'text',
+          thread_parent_id: thread.id
+        });
+
+      if (error) {
+        console.error('Error sending reply:', error);
+        return;
+      }
+
+      setReplyText('');
+    } catch (error) {
+      console.error('Error sending reply:', error);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendReply();
+    }
+  };
+
+  if (!isOpen || !thread) return null;
 
   return (
     <div className="w-[400px] flex flex-col border-l border-[#1E2538] bg-[#0A0F1C]">
@@ -91,7 +208,7 @@ export function ThreadPanel({ roomId }: ThreadPanelProps) {
           variant="ghost"
           size="icon"
           className="text-gray-400 hover:text-white"
-          onClick={() => setActiveThread(null)}
+          onClick={onClose}
         >
           <X size={20} />
         </Button>
@@ -105,17 +222,17 @@ export function ThreadPanel({ roomId }: ThreadPanelProps) {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-medium text-white">
-                  {activeThread.user.raw_user_meta_data?.full_name || activeThread.user.email}
+                  {thread.user.full_name || thread.user.email}
                 </span>
                 <span className="text-sm text-gray-400">
-                  {new Date(activeThread.created_at).toLocaleTimeString([], { 
+                  {new Date(thread.created_at).toLocaleTimeString([], { 
                     hour: '2-digit', 
                     minute: '2-digit' 
                   })}
                 </span>
               </div>
               <div className="mt-1 p-3 bg-[#1E2433] rounded-lg text-gray-300">
-                {activeThread.content}
+                {thread.content}
               </div>
             </div>
           </div>
@@ -134,7 +251,7 @@ export function ThreadPanel({ roomId }: ThreadPanelProps) {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-white">
-                      {reply.user.raw_user_meta_data?.full_name || reply.user.email}
+                      {reply.user.full_name || reply.user.email}
                     </span>
                     <span className="text-sm text-gray-400">
                       {new Date(reply.created_at).toLocaleTimeString([], { 
@@ -157,6 +274,9 @@ export function ThreadPanel({ roomId }: ThreadPanelProps) {
       <div className="p-4 border-t border-[#1E2538]">
           <input
             type="text"
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            onKeyPress={handleKeyPress}
             placeholder="Reply in thread..."
           className="w-full px-4 py-2 bg-[#1E2433] rounded-lg text-white placeholder-gray-400 border-none outline-none"
           />
