@@ -51,6 +51,7 @@ export default async function RoomPage({ params }: PageProps) {
     .from("messages")
     .select("*")
     .eq("room_id", roomId)
+    .is("thread_parent_id", null)  // Only fetch top-level messages
     .order("created_at", { ascending: true })
     .limit(50);
 
