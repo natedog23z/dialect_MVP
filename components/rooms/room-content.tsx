@@ -52,15 +52,16 @@ export function RoomContent({ room, participant, messagesWithUsers, user }: Room
       // Get user data for all messages
       const userIds = Array.from(new Set(updatedMessages.map(m => m.user_id)));
       const { data: users } = await supabase
-        .from("auth.users")
-        .select("id, email, raw_user_meta_data")
-        .in("id", userIds);
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', userIds);
 
       const messagesWithUsers = updatedMessages.map(message => {
-        const messageUser = users?.find(u => u.id === message.user_id) || {
+        const messageUser = users?.find(u => u.id === message.user_id);
+        const userData = messageUser || {
           id: message.user_id,
-          email: user.email,
-          raw_user_meta_data: user.user_metadata
+          email: 'Loading...',
+          full_name: 'Loading...'
         };
         
         // Count the actual number of replies
@@ -70,7 +71,13 @@ export function RoomContent({ room, participant, messagesWithUsers, user }: Room
         return {
           ...message,
           replies_count: replyCount,
-          user: messageUser
+          user: {
+            id: userData.id,
+            email: userData.email,
+            raw_user_meta_data: {
+              full_name: userData.full_name || userData.email
+            }
+          }
         };
       });
 

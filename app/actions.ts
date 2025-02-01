@@ -134,43 +134,73 @@ export const signOutAction = async () => {
 };
 
 export const joinRoomAction = async (roomId: string) => {
-  const supabase = await createClient();
+  console.log("[JOIN ACTION] Starting join room action for roomId:", roomId);
   
-  // Get the current user
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
-    return encodedRedirect("error", "/login", "You must be logged in to join a room");
-  }
+  try {
+    const supabase = await createClient();
+    
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      console.error("[JOIN ACTION] User authentication failed:", userError);
+      return encodedRedirect("error", "/login", "You must be logged in to join a room");
+    }
 
-  // Check if room exists
-  const { data: room, error: roomError } = await supabase
-    .from('rooms')
-    .select('id')
-    .eq('id', roomId)
-    .single();
+    console.log("[JOIN ACTION] Authenticated user:", user.id);
 
-  if (roomError || !room) {
-    return encodedRedirect("error", "/dashboard", "Room not found");
-  }
+    // Check if room exists
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('id')
+      .eq('id', roomId)
+      .single();
 
-  // Add user to room_participants
-  const { error: joinError } = await supabase
-    .from('room_participants')
-    .insert({
-      room_id: roomId,
-      user_id: user.id
-    })
-    .select()
-    .single();
+    console.log("[JOIN ACTION] Room lookup result:", { room, error: roomError?.message });
 
-  if (joinError) {
-    // If error is about unique constraint, user is already in room
-    if (joinError.code === '23505') {
+    if (roomError || !room) {
+      console.error("[JOIN ACTION] Room not found:", { roomId, error: roomError?.message });
+      return encodedRedirect("error", "/dashboard", "Room not found");
+    }
+
+    // Check if user is already a participant
+    const { data: existingParticipant, error: participantError } = await supabase
+      .from('room_participants')
+      .select('id')
+      .eq('room_id', roomId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (participantError?.code !== 'PGRST116') { // Not found error is expected
+      console.log("[JOIN ACTION] Participant check error:", participantError);
+    }
+
+    if (existingParticipant) {
+      console.log("[JOIN ACTION] User already in room, redirecting");
       return redirect(`/room/${roomId}`);
     }
-    return encodedRedirect("error", "/dashboard", "Failed to join room");
-  }
 
-  return redirect(`/room/${roomId}`);
+    console.log("[JOIN ACTION] Adding user to room");
+
+    // Add user to room_participants
+    const { error: joinError } = await supabase
+      .from('room_participants')
+      .insert({
+        room_id: roomId,
+        user_id: user.id
+      })
+      .select()
+      .single();
+
+    if (joinError) {
+      console.error("[JOIN ACTION] Failed to join room:", joinError);
+      return encodedRedirect("error", "/dashboard", "Failed to join room");
+    }
+
+    console.log("[JOIN ACTION] Successfully joined room");
+    return redirect(`/room/${roomId}`);
+  } catch (error) {
+    console.error("[JOIN ACTION] Unexpected error:", error);
+    return encodedRedirect("error", "/dashboard", "An unexpected error occurred");
+  }
 };

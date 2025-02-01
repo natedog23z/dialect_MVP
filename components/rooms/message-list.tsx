@@ -95,27 +95,67 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
                   user: {
                     id: currentUser.id,
                     email: currentUser.email,
-                    raw_user_meta_data: currentUser.user_metadata
+                    raw_user_meta_data: {
+                      full_name: currentUser.user_metadata?.full_name || currentUser.email
+                    }
                   }
                 };
                 console.log('Adding message from current user:', completeMessage);
                 setMessages(prev => [...prev, completeMessage]);
               } else {
-                // For other users' messages, use a temporary display until the page refreshes
-                const completeMessage: Message = {
-                  id: newMessage.id,
-                  content: newMessage.content,
-                  message_type: newMessage.message_type,
-                  created_at: newMessage.created_at,
-                  replies_count: 0,
-                  user: {
-                    id: newMessage.user_id,
-                    email: 'Loading...',
-                    raw_user_meta_data: { full_name: 'Loading...' }
+                // For other users' messages, fetch their data through the API
+                try {
+                  console.log('Fetching user data for:', newMessage.user_id);
+                  const response = await fetch(`/api/user/${newMessage.user_id}`);
+                  if (!response.ok) {
+                    console.error('API Error:', {
+                      status: response.status,
+                      statusText: response.statusText
+                    });
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Error response:', errorData);
+                    throw new Error(`Failed to fetch user data: ${response.status} ${response.statusText}`);
                   }
-                };
-                console.log('Adding message from other user:', completeMessage);
-                setMessages(prev => [...prev, completeMessage]);
+                  const userData = await response.json();
+                  console.log('Fetched user data:', userData);
+
+                  // Validate the user data
+                  if (!userData || !userData.id || userData.id !== newMessage.user_id) {
+                    console.error('Invalid user data received:', {
+                      expected: newMessage.user_id,
+                      received: userData
+                    });
+                    throw new Error('Invalid user data received');
+                  }
+
+                  const completeMessage: Message = {
+                    id: newMessage.id,
+                    content: newMessage.content,
+                    message_type: newMessage.message_type,
+                    created_at: newMessage.created_at,
+                    replies_count: 0,
+                    user: userData
+                  };
+                  console.log('Adding message with fetched user data:', completeMessage);
+                  setMessages(prev => [...prev, completeMessage]);
+                } catch (error) {
+                  console.error('Error fetching user data:', error);
+                  // Add message with temporary user data that will be updated on page refresh
+                  const completeMessage: Message = {
+                    id: newMessage.id,
+                    content: newMessage.content,
+                    message_type: newMessage.message_type,
+                    created_at: newMessage.created_at,
+                    replies_count: 0,
+                    user: {
+                      id: newMessage.user_id,
+                      email: 'Loading...',
+                      raw_user_meta_data: { full_name: 'Loading...' }
+                    }
+                  };
+                  console.log('Adding message with temporary user data:', completeMessage);
+                  setMessages(prev => [...prev, completeMessage]);
+                }
               }
             } else if (newMessage.thread_parent_id) {
               // Update reply count for the parent message

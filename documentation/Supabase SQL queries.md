@@ -85,6 +85,13 @@ USING (
     OR creator_id = auth.uid()
 );
 
+-- Allow users to view rooms when joining
+CREATE POLICY "Users can view rooms when joining"
+ON public.rooms
+FOR SELECT
+TO authenticated
+USING (true);  -- Allow any authenticated user to view room details
+
 Index for Room Participants 
 create index idx_room_participants_room_id on public.room_participants (room_id);
 create index idx_messages_created_at on public.messages (created_at);

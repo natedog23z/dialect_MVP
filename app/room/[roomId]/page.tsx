@@ -10,6 +10,12 @@ interface PageProps {
   }>;
 }
 
+interface ProfileUser {
+  id: string;
+  email: string;
+  full_name: string | null;
+}
+
 export default async function RoomPage({ params }: PageProps) {
   const supabase = await createClient();
   const { roomId } = await params;  // Async access
@@ -63,16 +69,17 @@ export default async function RoomPage({ params }: PageProps) {
   // Get user data for all messages
   const userIds = Array.from(new Set((messages || []).map(m => m.user_id)));
   const { data: users } = await supabase
-    .from("auth.users")
-    .select("id, email, raw_user_meta_data")
-    .in("id", userIds);
+    .from('profiles')
+    .select('id, email, full_name')
+    .in('id', userIds);
 
   // Combine messages with user data
   const messagesWithUsers = (messages || []).map(message => {
-    const messageUser = users?.find(u => u.id === message.user_id) || {
+    const messageUser = users?.find(u => u.id === message.user_id) as ProfileUser | undefined;
+    const userData = messageUser || {
       id: message.user_id,
-      email: user.email,
-      raw_user_meta_data: user.user_metadata
+      email: 'Loading...',
+      full_name: 'Loading...'
     };
     
     // Count the actual number of replies
@@ -82,7 +89,13 @@ export default async function RoomPage({ params }: PageProps) {
     return {
       ...message,
       replies_count: replyCount,
-      user: messageUser
+      user: {
+        id: userData.id,
+        email: userData.email,
+        raw_user_meta_data: {
+          full_name: userData.full_name || userData.email
+        }
+      }
     };
   });
 
