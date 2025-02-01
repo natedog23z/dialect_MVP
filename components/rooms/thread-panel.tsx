@@ -278,14 +278,23 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
 
       {/* Reply Input */}
       <div className="p-4 border-t border-[#1E2538]">
+        <div className="flex gap-2">
           <input
             type="text"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Reply in thread..."
-          className="w-full px-4 py-2 bg-[#1E2433] rounded-lg text-white placeholder-gray-400 border-none outline-none"
+            className="flex-1 px-4 py-2 bg-[#1E2433] rounded-lg text-white placeholder-gray-400 border-none outline-none min-w-0"
           />
+          <Button
+            onClick={handleSendReply}
+            disabled={!replyText.trim()}
+            className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+          >
+            Send
+          </Button>
+        </div>
       </div>
     </div>
   );
