@@ -226,19 +226,28 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
             </div>
           )}
 
+          {/* Thread count - permanently visible when there are replies */}
+          {typeof message.replies_count === 'number' && message.replies_count > 0 && (
+            <button 
+              onClick={() => onThreadSelect?.(message)}
+              className="mt-2 flex items-center gap-1.5 text-[#4477FF] hover:text-[#3366EE] text-sm"
+            >
+              <MessageSquare size={14} />
+              <span>
+                {message.replies_count} {message.replies_count === 1 ? 'reply' : 'replies'}
+              </span>
+            </button>
+          )}
+
+          {/* Hover toolbar for actions */}
           <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-all duration-200 ease-in-out flex items-center gap-2 bg-[#2A2F3F] rounded-lg p-1 shadow-lg">
             <Button 
               variant="ghost" 
               size="sm" 
-              className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white flex items-center gap-1"
+              className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white"
               onClick={() => onThreadSelect?.(message)}
             >
               <MessageSquare size={16} />
-              {typeof message.replies_count === 'number' && message.replies_count > 0 && (
-                <span className="text-xs bg-[#4477FF] text-white px-1.5 rounded-full">
-                  {message.replies_count}
-                </span>
-              )}
             </Button>
             <Button variant="ghost" size="sm" className="p-1.5 hover:bg-[#1E2433] text-gray-400 hover:text-white">
               <Smile size={16} />
