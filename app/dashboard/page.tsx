@@ -28,21 +28,59 @@ export default async function DashboardPage() {
     return redirect("/login");
   }
 
-  // Fetch rooms where user is a participant
-  const { data: rooms } = await supabase
+  // First, let's check the room_participants table directly
+  const participantsCheck = await supabase
+    .from('room_participants')
+    .select('*')
+    .eq('user_id', user.id);
+
+  console.log('Direct room_participants check:', {
+    data: participantsCheck.data,
+    error: participantsCheck.error,
+    user_id: user.id
+  });
+
+  // Then try the rooms query
+  const participantQuery = await supabase
     .from('room_participants')
     .select(`
-      room:rooms (
+      room:rooms!room_participants_room_id_fkey (
         id,
         name,
         creator_id,
         created_at
       )
     `)
-    .eq('user_id', user.id)
-    .order('created_at', { foreignTable: 'rooms', ascending: false });
+    .eq('user_id', user.id);
 
-  const userRooms = ((rooms || []) as unknown as Array<{ room: Room }>).map(r => r.room);
+  console.log('Participant Query Results:', {
+    data: participantQuery.data,
+    error: participantQuery.error,
+    user_id: user.id
+  });
+
+  // Fetch rooms created by the user
+  const createdQuery = await supabase
+    .from('rooms')
+    .select('id, name, creator_id, created_at')
+    .eq('creator_id', user.id);
+
+  console.log('Created Rooms Query Results:', {
+    data: createdQuery.data,
+    error: createdQuery.error,
+    user_id: user.id
+  });
+
+  // Combine and deduplicate rooms
+  const participantRoomsList = ((participantQuery.data || []) as unknown as Array<{ room: Room }>).map(r => r.room);
+  const createdRoomsList = createdQuery.data || [];
+  const uniqueRooms = [...createdRoomsList, ...participantRoomsList]
+    .filter((room, index, self) => 
+      index === self.findIndex((r) => r.id === room.id)
+    )
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const userRooms = uniqueRooms;
 
   return (
     <div className="min-h-screen bg-[#0A0F1C]">

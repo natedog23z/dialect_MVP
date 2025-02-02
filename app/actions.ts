@@ -152,15 +152,23 @@ export const joinRoomAction = async (roomId: string) => {
     // Check if room exists
     const { data: room, error: roomError } = await supabase
       .from('rooms')
-      .select('id')
+      .select('id, name, creator_id')
       .eq('id', roomId)
       .single();
 
-    console.log("[JOIN ACTION] Room lookup result:", { room, error: roomError?.message });
+    console.log("[JOIN ACTION] Room lookup result:", { 
+      room, 
+      error: roomError ? {
+        message: roomError.message,
+        code: roomError.code,
+        details: roomError.details,
+        hint: roomError.hint
+      } : null 
+    });
 
     if (roomError || !room) {
-      console.error("[JOIN ACTION] Room not found:", { roomId, error: roomError?.message });
-      return encodedRedirect("error", "/dashboard", "Room not found");
+      console.error("[JOIN ACTION] Room not found:", { roomId, error: roomError });
+      return encodedRedirect("error", "/dashboard", `Room not found: ${roomError?.message || 'Unknown error'}`);
     }
 
     // Check if user is already a participant
@@ -171,6 +179,16 @@ export const joinRoomAction = async (roomId: string) => {
       .eq('user_id', user.id)
       .single();
 
+    console.log("[JOIN ACTION] Participant check:", {
+      existingParticipant,
+      error: participantError ? {
+        message: participantError.message,
+        code: participantError.code,
+        details: participantError.details,
+        hint: participantError.hint
+      } : null
+    });
+
     if (participantError?.code !== 'PGRST116') { // Not found error is expected
       console.log("[JOIN ACTION] Participant check error:", participantError);
     }
@@ -180,10 +198,13 @@ export const joinRoomAction = async (roomId: string) => {
       return redirect(`/room/${roomId}`);
     }
 
-    console.log("[JOIN ACTION] Adding user to room");
+    console.log("[JOIN ACTION] Attempting to add user to room:", {
+      room_id: roomId,
+      user_id: user.id
+    });
 
     // Add user to room_participants
-    const { error: joinError } = await supabase
+    const { data: joinData, error: joinError } = await supabase
       .from('room_participants')
       .insert({
         room_id: roomId,
@@ -192,15 +213,26 @@ export const joinRoomAction = async (roomId: string) => {
       .select()
       .single();
 
+    console.log("[JOIN ACTION] Join attempt result:", {
+      success: !joinError,
+      data: joinData,
+      error: joinError ? {
+        message: joinError.message,
+        code: joinError.code,
+        details: joinError.details,
+        hint: joinError.hint
+      } : null
+    });
+
     if (joinError) {
       console.error("[JOIN ACTION] Failed to join room:", joinError);
-      return encodedRedirect("error", "/dashboard", "Failed to join room");
+      return encodedRedirect("error", "/dashboard", `Failed to join room: ${joinError.message}`);
     }
 
     console.log("[JOIN ACTION] Successfully joined room");
     return redirect(`/room/${roomId}`);
   } catch (error) {
     console.error("[JOIN ACTION] Unexpected error:", error);
-    return encodedRedirect("error", "/dashboard", "An unexpected error occurred");
+    return encodedRedirect("error", "/dashboard", `An unexpected error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
