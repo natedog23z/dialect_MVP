@@ -5,6 +5,29 @@ import { X } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { createClient } from '@/utils/supabase/client';
 
+// Add helper function to detect URLs
+const detectAndRenderUrls = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a 
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 hover:text-blue-300 hover:underline"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+};
+
 interface Thread {
   id: string;
   content: string;
@@ -238,7 +261,7 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
                 </span>
               </div>
               <div className="mt-1 p-3 bg-[#1E2433] rounded-lg text-gray-300">
-                {thread.content}
+                {detectAndRenderUrls(thread.content)}
               </div>
             </div>
           </div>
@@ -251,7 +274,7 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
               No replies yet
             </div>
           ) : (
-            replies.map((reply) => (
+            replies.map(reply => (
               <div key={reply.id} className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-[#2A2F3F]" />
                 <div>
@@ -267,7 +290,7 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
                     </span>
                   </div>
                   <div className="mt-1 p-3 bg-[#1E2433] rounded-lg text-gray-300">
-                    {reply.content}
+                    {detectAndRenderUrls(reply.content)}
                   </div>
                 </div>
               </div>
