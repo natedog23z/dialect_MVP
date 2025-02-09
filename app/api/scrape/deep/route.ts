@@ -87,7 +87,11 @@ async function startFirecrawlJob(url: string): Promise<FirecrawlResponse> {
     }
   };
 
-  console.log('[FIRECRAWL] Final content length being returned:', result.result.content.length);
+  if (result.result) {
+    console.log('[FIRECRAWL] Final content length being returned:', result.result.content.length);
+  } else {
+    console.log('[FIRECRAWL] Warning: No content in result');
+  }
   
   return result;
 }
