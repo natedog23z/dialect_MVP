@@ -118,7 +118,8 @@ async function processScrapedContent(
         text_content: content,
         meta_data: metadata,
         last_scraped_at: new Date().toISOString(),
-        scrape_attempts: 1
+        scrape_attempts: 1,
+        ai_summary_status: 'pending'
       })
       .select();
 
@@ -159,7 +160,8 @@ async function processScrapedContent(
         text_content: chunks[i],
         meta_data: i === 0 ? metadata : null, // Store metadata only in first chunk
         last_scraped_at: new Date().toISOString(),
-        scrape_attempts: 1
+        scrape_attempts: 1,
+        ai_summary_status: 'pending'
       })
       .select();
 
@@ -202,61 +204,59 @@ export async function POST(request: Request) {
     console.log('[ENDPOINT] Starting Firecrawl job');
     const firecrawlJob = await startFirecrawlJob(url);
 
-    // Fire and forget - process in background
-    (async () => {
-      try {
-        console.log('[BACKGROUND] Starting background processing');
-        // Process the content
-        if (firecrawlJob.result) {
-          await processScrapedContent(
-            supabase,
-            sharedContentId,
-            firecrawlJob.result.content,
-            firecrawlJob.result.metadata
-          );
-          console.log('[BACKGROUND] Background processing completed successfully');
-        } else {
-          console.error('[BACKGROUND] No content in Firecrawl response');
-          // Record the error in scraped_contents
-          await supabase
-            .from('scraped_contents')
-            .insert({
-              shared_content_id: sharedContentId,
-              chunk_index: 0,
-              error_message: 'No content in Firecrawl response',
-              last_scraped_at: new Date().toISOString(),
-              scrape_attempts: 1
-            });
-          throw new Error('No content in Firecrawl response');
-        }
-      } catch (error) {
-        console.error('[BACKGROUND] Processing error:', error);
-        // Record the error in scraped_contents if not already recorded
+    // Process the content synchronously
+    try {
+      console.log('[ENDPOINT] Starting content processing');
+      if (firecrawlJob.result) {
+        await processScrapedContent(
+          supabase,
+          sharedContentId,
+          firecrawlJob.result.content,
+          firecrawlJob.result.metadata
+        );
+        console.log('[ENDPOINT] Content processing completed successfully');
+      } else {
+        console.error('[ENDPOINT] No content in Firecrawl response');
+        // Record the error in scraped_contents
         await supabase
           .from('scraped_contents')
           .insert({
             shared_content_id: sharedContentId,
             chunk_index: 0,
-            error_message: error instanceof Error ? error.message : 'Unknown error',
+            error_message: 'No content in Firecrawl response',
             last_scraped_at: new Date().toISOString(),
             scrape_attempts: 1
-          })
-          .select();
+          });
+        throw new Error('No content in Firecrawl response');
       }
-    })();
+    } catch (error) {
+      console.error('[ENDPOINT] Processing error:', error);
+      // Record the error in scraped_contents
+      await supabase
+        .from('scraped_contents')
+        .insert({
+          shared_content_id: sharedContentId,
+          chunk_index: 0,
+          error_message: error instanceof Error ? error.message : 'Unknown error',
+          last_scraped_at: new Date().toISOString(),
+          scrape_attempts: 1
+        })
+        .select();
+      throw error;
+    }
 
-    // Return immediately with job started status
+    // Return success response
     console.log('[ENDPOINT] Returning success response');
     return NextResponse.json({
       success: true,
-      message: 'Scraping job started',
+      message: 'Content processed successfully',
       jobId: firecrawlJob.jobId,
     });
 
   } catch (error) {
     console.error('[ENDPOINT] Error in deep scrape endpoint:', error);
     return NextResponse.json(
-      { error: 'Failed to start scraping job', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to process content', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

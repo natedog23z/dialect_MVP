@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "app/api/scrape/deep/route.ts": {
+      "maxDuration": 60
+    }
+  }
+} 
