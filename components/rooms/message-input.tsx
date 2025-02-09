@@ -10,6 +10,9 @@ interface MessageInputProps {
   userId: string;
 }
 
+// URL regex pattern
+const URL_PATTERN = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/;
+
 export function MessageInput({ roomId, userId }: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -65,11 +68,15 @@ export function MessageInput({ roomId, userId }: MessageInputProps) {
     if (!message.trim()) return;
 
     try {
-      console.log('Sending message:', {
+      // Check if the message contains a URL
+      const containsUrl = URL_PATTERN.test(message.trim());
+      const messageType = containsUrl ? 'url' : 'text';
+
+      console.log('Attempting to send message:', {
         room_id: roomId,
         user_id: userId,
         content: message.trim(),
-        message_type: 'text'
+        message_type: messageType
       });
 
       const { data, error } = await supabase
@@ -78,19 +85,44 @@ export function MessageInput({ roomId, userId }: MessageInputProps) {
           room_id: roomId,
           user_id: userId,
           content: message.trim(),
-          message_type: 'text'
+          message_type: messageType
         })
         .select();
 
       if (error) {
-        console.error('Error sending message:', error);
+        console.error('Detailed error sending message:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
       console.log('Message sent successfully:', data);
+
+      // If it's a URL message, trigger scraping immediately
+      if (messageType === 'url' && data?.[0]?.id) {
+        try {
+          const response = await fetch(`/api/scrape?${new URLSearchParams({
+            messageId: data[0].id.toString()
+          })}`);
+
+          if (!response.ok) {
+            console.error('Error scraping URL:', await response.text());
+          }
+        } catch (error) {
+          console.error('Error triggering URL scrape:', error);
+        }
+      }
+
       setMessage('');
-    } catch (error) {
-      console.error('Error sending message:', error);
+    } catch (err: any) {
+      console.error('Caught error sending message:', {
+        name: err?.name,
+        message: err?.message,
+        stack: err?.stack
+      });
     }
   };
 

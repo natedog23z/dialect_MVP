@@ -31,7 +31,7 @@ const detectAndRenderUrls = (text: string) => {
 interface Thread {
   id: string;
   content: string;
-  message_type: 'text' | 'audio' | 'system';
+  message_type: 'text' | 'audio' | 'system' | 'url';
   created_at: string;
   user: {
     id: string;
@@ -39,6 +39,14 @@ interface Thread {
     full_name?: string;
   };
   replies?: Thread[];
+  shared_content?: {
+    status: 'pending' | 'scraped' | 'failed';
+    processed_data?: {
+      title?: string;
+      description?: string;
+      image?: string;
+    };
+  };
 }
 
 interface ThreadPanelProps {
@@ -102,7 +110,8 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
             id,
             email,
             full_name
-          )
+          ),
+          shared_content!messages_shared_content_id_fkey(*)
         `)
         .eq('thread_parent_id', threadId)
         .order('created_at', { ascending: true });
@@ -121,13 +130,14 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
       const repliesWithUsers: Thread[] = replyData.map(reply => ({
         id: reply.id,
         content: reply.content,
-        message_type: reply.message_type as 'text' | 'audio' | 'system',
+        message_type: reply.message_type as 'text' | 'audio' | 'system' | 'url',
         created_at: reply.created_at,
         user: reply.user || {
           id: reply.user_id,
           email: 'Unknown User',
           full_name: 'Unknown User'
-        }
+        },
+        shared_content: reply.shared_content
       }));
 
       setReplies(repliesWithUsers);
@@ -182,7 +192,7 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
           table: 'messages',
           filter: `thread_parent_id=eq.${thread.id}`
         }, 
-        (payload) => {
+        async (payload) => {
           const newReply = payload.new as DatabaseMessage;
           
           // If it's the current user's reply, we can use their data directly
@@ -199,25 +209,40 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
               }
             };
             setReplies(prev => [...prev, completeReply]);
-            // Trigger count update for other users' replies too
-            onReplyAdded?.();
           } else {
-            // For other users' replies, use a temporary display
-            const completeReply: Thread = {
-              id: newReply.id,
-              content: newReply.content,
-              message_type: newReply.message_type,
-              created_at: newReply.created_at,
-              user: {
-                id: newReply.user_id,
-                email: 'Loading...',
-                full_name: 'Loading...'
-              }
-            };
-            setReplies(prev => [...prev, completeReply]);
-            // Trigger count update for other users' replies
-            onReplyAdded?.();
+            // For other users' replies, fetch the complete data
+            const { data: replyWithUser } = await supabase
+              .from('messages')
+              .select(`
+                *,
+                user:user_id (
+                  id,
+                  email,
+                  full_name
+                ),
+                shared_content!messages_shared_content_id_fkey(*)
+              `)
+              .eq('id', newReply.id)
+              .single();
+
+            if (replyWithUser) {
+              const completeReply: Thread = {
+                id: replyWithUser.id,
+                content: replyWithUser.content,
+                message_type: replyWithUser.message_type,
+                created_at: replyWithUser.created_at,
+                user: replyWithUser.user || {
+                  id: replyWithUser.user_id,
+                  email: 'Unknown User',
+                  full_name: 'Unknown User'
+                },
+                shared_content: replyWithUser.shared_content
+              };
+              setReplies(prev => [...prev, completeReply]);
+            }
           }
+          // Always trigger count update
+          onReplyAdded?.();
         }
       )
       .subscribe();

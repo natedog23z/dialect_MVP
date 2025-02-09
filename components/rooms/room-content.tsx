@@ -10,13 +10,21 @@ import { createClient } from '@/utils/supabase/client';
 interface Message {
   id: string;
   content: string;
-  message_type: 'text' | 'audio' | 'system';
+  message_type: 'text' | 'audio' | 'system' | 'url';
   created_at: string;
   user: {
     id: string;
     email: string;
     raw_user_meta_data: {
       full_name?: string;
+    };
+  };
+  shared_content?: {
+    status: 'pending' | 'scraped' | 'failed';
+    processed_data?: {
+      title?: string;
+      description?: string;
+      image?: string;
     };
   };
 }
@@ -35,26 +43,37 @@ export function RoomContent({ room, participant, messagesWithUsers, user }: Room
   const supabase = createClient();
 
   const refreshMessages = async () => {
-    const { data: updatedMessages } = await supabase
+    console.log('Refreshing messages for room:', room.id);
+    const { data: updatedMessages, error } = await supabase
       .from("messages")
       .select(`
         *,
-        replies:messages!thread_parent_id(id)
+        replies:messages!thread_parent_id(id),
+        shared_content!messages_shared_content_id_fkey(*)
       `)
       .eq("room_id", room.id)
       .is("thread_parent_id", null)
-      .order("created_at", { ascending: true })
-      .limit(50);
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error('Error fetching messages:', error);
+      return;
+    }
 
     console.log('Updated messages from Supabase:', updatedMessages);
 
     if (updatedMessages) {
       // Get user data for all messages
       const userIds = Array.from(new Set(updatedMessages.map(m => m.user_id)));
-      const { data: users } = await supabase
+      const { data: users, error: userError } = await supabase
         .from('profiles')
         .select('id, email, full_name')
         .in('id', userIds);
+
+      if (userError) {
+        console.error('Error fetching users:', userError);
+        return;
+      }
 
       const messagesWithUsers = updatedMessages.map(message => {
         const messageUser = users?.find(u => u.id === message.user_id);
@@ -85,9 +104,33 @@ export function RoomContent({ room, participant, messagesWithUsers, user }: Room
     }
   };
 
+  // Set up real-time subscription for new messages
   useEffect(() => {
-    setMessages(messagesWithUsers);
-  }, [messagesWithUsers]);
+    const channel = supabase
+      .channel(`room-${room.id}`)
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `room_id=eq.${room.id}`
+        },
+        async (payload) => {
+          console.log('New message received:', payload);
+          // Refresh all messages to ensure consistency
+          refreshMessages();
+        }
+      )
+      .subscribe();
+
+    // Initial load
+    refreshMessages();
+
+    // Cleanup subscription
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [room.id]);
 
   const handleThreadSelect = (message: Message) => {
     setActiveThread(message);

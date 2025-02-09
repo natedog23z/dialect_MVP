@@ -52,12 +52,13 @@ export default async function RoomPage({ params }: PageProps) {
     return redirect("/dashboard");
   }
 
-  // Get initial messages
+  // Get initial messages with shared_content
   const { data: messages } = await supabase
     .from("messages")
     .select(`
       *,
-      replies:messages!thread_parent_id(id)
+      replies:messages!thread_parent_id(id),
+      shared_content(*)
     `)
     .eq("room_id", roomId)
     .is("thread_parent_id", null)  // Only fetch top-level messages
@@ -86,6 +87,11 @@ export default async function RoomPage({ params }: PageProps) {
     const replyCount = Array.isArray(message.replies) ? message.replies.length : 0;
     console.log(`Message ${message.id} has ${replyCount} replies:`, message.replies);
     
+    // Get shared_content data
+    const sharedContent = Array.isArray(message.shared_content) && message.shared_content.length > 0
+      ? message.shared_content[0]
+      : null;
+    
     return {
       ...message,
       replies_count: replyCount,
@@ -95,7 +101,8 @@ export default async function RoomPage({ params }: PageProps) {
         raw_user_meta_data: {
           full_name: userData.full_name || userData.email
         }
-      }
+      },
+      shared_content: sharedContent
     };
   });
 
