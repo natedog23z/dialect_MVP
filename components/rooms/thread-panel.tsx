@@ -31,7 +31,7 @@ const detectAndRenderUrls = (text: string) => {
 interface Thread {
   id: string;
   content: string;
-  message_type: 'text' | 'audio' | 'system' | 'url';
+  message_type: 'text' | 'audio' | 'system' | 'url' | 'system_status' | 'ai_response';
   created_at: string;
   user: {
     id: string;
@@ -69,7 +69,7 @@ interface ThreadPanelProps {
 interface DatabaseMessage {
   id: string;
   content: string;
-  message_type: 'text' | 'audio' | 'system';
+  message_type: 'text' | 'audio' | 'system' | 'url' | 'system_status' | 'ai_response';
   created_at: string;
   user_id: string;
   thread_parent_id?: string;
@@ -85,7 +85,7 @@ interface DatabaseUser {
 interface DatabaseReplyResponse {
   id: string;
   content: string;
-  message_type: 'text' | 'audio' | 'system';
+  message_type: 'text' | 'audio' | 'system' | 'url' | 'system_status' | 'ai_response';
   created_at: string;
   user_id: string;
   user: DatabaseUser | null;
@@ -141,7 +141,7 @@ export function ThreadPanel({
       const repliesWithUsers: Thread[] = replyData.map(reply => ({
         id: reply.id,
         content: reply.content,
-        message_type: reply.message_type as 'text' | 'audio' | 'system' | 'url',
+        message_type: reply.message_type as 'text' | 'audio' | 'system' | 'url' | 'system_status' | 'ai_response',
         created_at: reply.created_at,
         user: reply.user || {
           id: reply.user_id,

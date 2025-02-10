@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button";
 import { useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { UrlPreviewCard } from './url-preview-card';
+import { SystemStatusMessage } from './system-status-message';
 
 interface Message {
   id: string;
   content: string;
-  message_type: 'text' | 'audio' | 'system' | 'url';
+  message_type: 'text' | 'audio' | 'system' | 'url' | 'system_status' | 'ai_response';
   created_at: string;
   replies_count?: number;
+  thread_parent_id?: string | null;
   user: {
     id: string;
     email: string;
@@ -46,7 +48,7 @@ interface MessageListProps {
 interface DatabaseMessage {
   id: string;
   content: string;
-  message_type: 'text' | 'audio' | 'system' | 'url';
+  message_type: 'text' | 'audio' | 'system' | 'url' | 'system_status' | 'ai_response';
   created_at: string;
   user_id: string;
   room_id: string;
@@ -70,6 +72,7 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [summarizingUrls, setSummarizingUrls] = useState<Set<string>>(new Set());
+  const [processingMessages, setProcessingMessages] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -108,6 +111,34 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
         throw new Error('No shared content found for this message');
       }
 
+      // Send a "Summarize this link" message as a thread reply
+      const { data: summaryRequest, error: summaryRequestError } = await supabase
+        .from('messages')
+        .insert({
+          content: 'Summarize this link',
+          message_type: 'text',
+          room_id: roomId,
+          user_id: currentUser.id,
+          thread_parent_id: messageId // This makes it a thread reply
+        })
+        .select()
+        .single();
+
+      if (summaryRequestError) throw summaryRequestError;
+
+      // Add the system status message as a thread reply
+      const { error: statusMessageError } = await supabase
+        .from('messages')
+        .insert({
+          content: 'Processing your request...',
+          message_type: 'system_status',
+          room_id: roomId,
+          user_id: process.env.NEXT_PUBLIC_SYSTEM_USER_ID || '22222222-2222-4222-2222-222222222222',
+          thread_parent_id: messageId // This makes it a thread reply
+        });
+
+      if (statusMessageError) throw statusMessageError;
+
       // Call the deep scraping endpoint
       const response = await fetch('/api/scrape/deep', {
         method: 'POST',
@@ -124,20 +155,6 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to start deep scraping');
       }
-
-      // Send a "Summarize this link" message as a thread reply
-      const { error: summaryRequestError } = await supabase
-        .from('messages')
-        .insert({
-          content: 'Summarize this link',
-          message_type: 'text',
-          room_id: roomId,
-          user_id: currentUser.id,
-          thread_parent_id: messageId // This makes it a thread reply
-        });
-
-      if (summaryRequestError) throw summaryRequestError;
-
     } catch (error) {
       console.error('Error requesting summary:', error);
     } finally {
@@ -200,88 +217,84 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
             if (newMessage.room_id === roomId && !newMessage.thread_parent_id) {
               console.log('Processing top-level message:', newMessage);
               
-              // Fetch shared content if it's a URL message
-              let sharedContent = null;
-              if (newMessage.message_type === 'url') {
-                sharedContent = await fetchSharedContent(newMessage.id);
-              }
-              
-              // If it's the current user's message, we can use their data directly
-              if (newMessage.user_id === currentUser.id) {
-                const completeMessage: Message = {
+              // Check if message already exists
+              setMessages(prev => {
+                // If message with this ID already exists, don't add it
+                if (prev.some(msg => msg.id === newMessage.id)) {
+                  console.log('Message already exists, skipping:', newMessage.id);
+                  return prev;
+                }
+
+                // Fetch shared content if it's a URL message
+                let sharedContent = null;
+                if (newMessage.message_type === 'url') {
+                  fetchSharedContent(newMessage.id).then(content => {
+                    if (content) {
+                      setMessages(current => 
+                        current.map(msg => 
+                          msg.id === newMessage.id 
+                            ? { ...msg, shared_content: content }
+                            : msg
+                        )
+                      );
+                    }
+                  });
+                }
+                
+                // If it's the current user's message, we can use their data directly
+                if (newMessage.user_id === currentUser.id) {
+                  const completeMessage: Message = {
+                    id: newMessage.id,
+                    content: newMessage.content,
+                    message_type: newMessage.message_type,
+                    created_at: newMessage.created_at,
+                    replies_count: 0,
+                    thread_parent_id: newMessage.thread_parent_id,
+                    user: {
+                      id: currentUser.id,
+                      email: currentUser.email,
+                      raw_user_meta_data: {
+                        full_name: currentUser.user_metadata?.full_name || currentUser.email
+                      }
+                    }
+                  };
+                  console.log('Adding message from current user:', completeMessage);
+                  return [...prev, completeMessage];
+                }
+
+                // For other users' messages, add with temporary data and update later
+                const tempMessage: Message = {
                   id: newMessage.id,
                   content: newMessage.content,
                   message_type: newMessage.message_type,
                   created_at: newMessage.created_at,
                   replies_count: 0,
+                  thread_parent_id: newMessage.thread_parent_id,
                   user: {
-                    id: currentUser.id,
-                    email: currentUser.email,
-                    raw_user_meta_data: {
-                      full_name: currentUser.user_metadata?.full_name || currentUser.email
-                    }
-                  },
-                  shared_content: sharedContent
+                    id: newMessage.user_id,
+                    email: 'Loading...',
+                    raw_user_meta_data: { full_name: 'Loading...' }
+                  }
                 };
-                console.log('Adding message from current user:', completeMessage);
-                setMessages(prev => [...prev, completeMessage]);
-              } else {
-                // For other users' messages, fetch their data through the API
-                try {
-                  console.log('Fetching user data for:', newMessage.user_id);
-                  const response = await fetch(`/api/user/${newMessage.user_id}`);
-                  if (!response.ok) {
-                    console.error('API Error:', {
-                      status: response.status,
-                      statusText: response.statusText
-                    });
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('Error response:', errorData);
-                    throw new Error(`Failed to fetch user data: ${response.status} ${response.statusText}`);
-                  }
-                  const userData = await response.json();
-                  console.log('Fetched user data:', userData);
 
-                  // Validate the user data
-                  if (!userData || !userData.id || userData.id !== newMessage.user_id) {
-                    console.error('Invalid user data received:', {
-                      expected: newMessage.user_id,
-                      received: userData
-                    });
-                    throw new Error('Invalid user data received');
-                  }
+                // Fetch user data in the background
+                fetch(`/api/user/${newMessage.user_id}`)
+                  .then(response => response.json())
+                  .then(userData => {
+                    if (userData && userData.id === newMessage.user_id) {
+                      setMessages(current =>
+                        current.map(msg =>
+                          msg.id === newMessage.id
+                            ? { ...msg, user: userData }
+                            : msg
+                        )
+                      );
+                    }
+                  })
+                  .catch(error => console.error('Error fetching user data:', error));
 
-                  const completeMessage: Message = {
-                    id: newMessage.id,
-                    content: newMessage.content,
-                    message_type: newMessage.message_type,
-                    created_at: newMessage.created_at,
-                    replies_count: 0,
-                    user: userData,
-                    shared_content: sharedContent
-                  };
-                  console.log('Adding message with fetched user data:', completeMessage);
-                  setMessages(prev => [...prev, completeMessage]);
-                } catch (error) {
-                  console.error('Error fetching user data:', error);
-                  // Add message with temporary user data that will be updated on page refresh
-                  const completeMessage: Message = {
-                    id: newMessage.id,
-                    content: newMessage.content,
-                    message_type: newMessage.message_type,
-                    created_at: newMessage.created_at,
-                    replies_count: 0,
-                    user: {
-                      id: newMessage.user_id,
-                      email: 'Loading...',
-                      raw_user_meta_data: { full_name: 'Loading...' }
-                    },
-                    shared_content: sharedContent
-                  };
-                  console.log('Adding message with temporary user data:', completeMessage);
-                  setMessages(prev => [...prev, completeMessage]);
-                }
-              }
+                return [...prev, tempMessage];
+              });
             } else if (newMessage.thread_parent_id) {
               // Update reply count for the parent message
               console.log('Updating reply count for message:', newMessage.thread_parent_id);
@@ -294,6 +307,25 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
                 }
                 return msg;
               }));
+            }
+
+            // If an AI response is received, mark the corresponding system status message as complete
+            if (newMessage.message_type === 'ai_response') {
+              setProcessingMessages(prev => {
+                const next = new Set(prev);
+                // Find and remove any processing messages in the same thread
+                messages.forEach(msg => {
+                  if (msg.thread_parent_id === newMessage.thread_parent_id && msg.message_type === 'system_status') {
+                    next.delete(msg.id);
+                  }
+                });
+                return next;
+              });
+            }
+
+            // If it's a system status message, mark it as processing
+            if (newMessage.message_type === 'system_status') {
+              setProcessingMessages(prev => new Set(prev).add(newMessage.id));
             }
           }
         }
@@ -350,6 +382,17 @@ export function MessageList({ messages: initialMessages, currentUser, roomId, on
   }, [messages]);
 
   const MessageWithToolbar = ({ message }: { message: Message }) => {
+    // If it's a system status message, render it differently
+    if (message.message_type === 'system_status') {
+      return (
+        <SystemStatusMessage 
+          content={message.content} 
+          created_at={message.created_at}
+          isProcessing={processingMessages.has(message.id)}
+        />
+      );
+    }
+
     // Safely access user data with fallbacks
     const user = message.user || { id: 'unknown', email: 'Unknown User', raw_user_meta_data: {} };
     const isCurrentUser = user.id === currentUser?.id;

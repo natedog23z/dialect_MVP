@@ -10,8 +10,10 @@ import { createClient } from '@/utils/supabase/client';
 interface Message {
   id: string;
   content: string;
-  message_type: 'text' | 'audio' | 'system' | 'url';
+  message_type: 'text' | 'audio' | 'system' | 'url' | 'system_status' | 'ai_response';
   created_at: string;
+  replies_count?: number;
+  thread_parent_id?: string | null;
   user: {
     id: string;
     email: string;
