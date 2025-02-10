@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { createClient } from '@/utils/supabase/client';
 
@@ -62,6 +62,8 @@ interface ThreadPanelProps {
   };
   thread: Thread | null;
   onReplyAdded?: () => void;
+  isExpanded?: boolean;
+  onExpandToggle?: (expanded: boolean) => void;
 }
 
 interface DatabaseMessage {
@@ -89,7 +91,16 @@ interface DatabaseReplyResponse {
   user: DatabaseUser | null;
 }
 
-export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onReplyAdded }: ThreadPanelProps) {
+export function ThreadPanel({ 
+  roomId, 
+  isOpen, 
+  onClose, 
+  currentUser, 
+  thread, 
+  onReplyAdded,
+  isExpanded = false,
+  onExpandToggle
+}: ThreadPanelProps) {
   const [replies, setReplies] = useState<Thread[]>([]);
   const [replyText, setReplyText] = useState('');
   const supabase = createClient();
@@ -255,17 +266,27 @@ export function ThreadPanel({ roomId, isOpen, onClose, currentUser, thread, onRe
   if (!isOpen || !thread) return null;
 
   return (
-    <div className="w-[400px] flex flex-col border-l border-[#1E2538] bg-[#0A0F1C]">
+    <div className={`flex flex-col border-l border-[#1E2538] bg-[#0A0F1C] transition-all duration-300 ${isExpanded ? 'w-full' : 'w-[400px]'}`}>
       <header className="flex items-center justify-between p-4 border-b border-[#1E2538]">
         <h2 className="text-lg font-semibold text-white">Thread</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-gray-400 hover:text-white"
-          onClick={onClose}
-        >
-          <X size={20} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-gray-400 hover:text-white"
+            onClick={() => onExpandToggle?.(!isExpanded)}
+          >
+            {isExpanded ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-gray-400 hover:text-white"
+            onClick={onClose}
+          >
+            <X size={20} />
+          </Button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
